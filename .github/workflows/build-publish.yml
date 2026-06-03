@@ -27,6 +27,7 @@ jobs:
          uses: jfrog/setup-jfrog-cli@v3
          env:  
            JF_URL: ${{ secrets.JF_URL }}
+           JFROG_CLI_LOG_LEVEL: DEBUG
          with:
            oidc-provider-name: ${{ env.OIDC_PROVIDER }}
            oidc-audience: ${{ env.OIDC_AUDIENCE }}
