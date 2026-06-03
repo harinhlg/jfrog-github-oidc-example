@@ -1,54 +1,53 @@
-name: "JFrog-GitHub NPM Publish OIDC Integration"
-on: push
+name: "JFrog-GitHub Docker Publish OIDC Integration"
 
-# This is required as per
-# https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/configuring-openid-connect-in-cloud-providers#adding-permissions-settings
+on:
+  push
+
 permissions:
   id-token: write
+  contents: read
 
 jobs:
   build:
-     runs-on: ubuntu-latest
-     env:
-      OIDC_AUDIENCE: 'jfrog-github'
-      OIDC_PROVIDER: 'harish'
-      PLATFORM_REPO: 'harish-npm-virtual'
-     defaults:
-      run:
-        working-directory: ./package
-     steps:
-       - name: Checkout
-         uses: actions/checkout@v3
-              
-       - name: Setup Node npm
-         uses: actions/setup-node@v3
-   
-       - name: Setup JFrog CLI
-         uses: jfrog/setup-jfrog-cli@v3
-         env:  
-           JF_URL: ${{ secrets.JF_URL }}
-           JFROG_CLI_LOG_LEVEL: DEBUG
-         with:
-           oidc-provider-name: ${{ env.OIDC_PROVIDER }}
-           oidc-audience: ${{ env.OIDC_AUDIENCE }}
+    runs-on: ubuntu-latest
 
-       - name: Set CLI Config
-         run: jf npm-config --global=true --repo-resolve=$PLATFORM_REPO --repo-deploy=$PLATFORM_REPO
-           
-       - name: Install Dependencies
-         run: jf npm install
-           
-       - name: Run tests
-         run: npm test
-         
-       - name: Publish
-         run: jf npm publish
-         
-       - name: Publish Build info With JFrog CLI
-         run: |
-          # Collect environment variables for the build
+    env:
+      OIDC_AUDIENCE: "jfrog-github"
+      OIDC_PROVIDER: "harish"
+
+      JFROG_DOCKER_REPO: "418949-docker-local"
+      IMAGE_NAME: "my-app"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup JFrog CLI
+        uses: jfrog/setup-jfrog-cli@v4
+        env:
+          JF_URL: ${{ secrets.JF_URL }}
+          JFROG_CLI_LOG_LEVEL: DEBUG
+        with:
+          oidc-provider-name: ${{ env.OIDC_PROVIDER }}
+          oidc-audience: ${{ env.OIDC_AUDIENCE }}
+
+      - name: Configure Docker
+        run: jf docker-config
+
+      - name: Build Docker Image
+        run: |
+          docker build -t ${IMAGE_NAME}:${{ github.sha }} .
+
+      - name: Push Docker Image
+        run: |
+          jf docker push \
+            ${IMAGE_NAME}:${{ github.sha }} \
+            ${JFROG_DOCKER_REPO}/${IMAGE_NAME}:${{ github.sha }} \
+            --build-name=${{ github.workflow }} \
+            --build-number=${{ github.run_number }}
+
+      - name: Publish Build Info
+        run: |
           jf rt build-collect-env
-          # Collect VCS details from git and add them to the build
           jf rt build-add-git
-          # Publish build info
-          jf rt build-publish
+          jf rt build-publish "${{ github.workflow }}" "${{ github.run_number }}"
