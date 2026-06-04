@@ -2,11 +2,13 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-COPY package/package*.json ./
+# copy dependency files first (better caching)
+COPY package/package.json package/package-lock.json* ./
 
 RUN npm install
 
-COPY package/ .
+# copy full source
+COPY package/ ./
 
 EXPOSE 3000
 
