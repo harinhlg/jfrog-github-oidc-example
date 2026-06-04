@@ -14,6 +14,7 @@ jobs:
     env:
       IMAGE_NAME: my-app
       JFROG_DOCKER_REPO: 418949-docker-local
+      REGISTRY: hts2.jfrog.io   # NO /artifactory here
 
     steps:
       - uses: actions/checkout@v4
@@ -21,36 +22,32 @@ jobs:
       - name: Setup JFrog CLI
         uses: jfrog/setup-jfrog-cli@v4
         env:
-          JF_URL: ${{ secrets.JF_URL }}
+          JF_URL: ${{ secrets.JF_URL }}   # must be https://hts2.jfrog.io
         with:
           oidc-provider-name: harish
           oidc-audience: jfrog-github
 
-      # IMPORTANT FIX
-      - name: Set Registry (MUST include /artifactory)
-        run: |
-          echo "REGISTRY=hts2.jfrog.io/artifactory" >> $GITHUB_ENV
-
       - name: Build Image
-        run: |
-          docker build -t ${IMAGE_NAME}:${{ github.sha }} .
+        run: docker build -t ${IMAGE_NAME}:${{ github.sha }} .
+
+      - name: Docker Login via JFrog
+        run: jf docker login ${REGISTRY} --server-id=setup-jfrog-cli-server
 
       - name: Tag Image
         run: |
           docker tag ${IMAGE_NAME}:${{ github.sha }} \
-          ${REGISTRY}/${JFROG_DOCKER_REPO}/${IMAGE_NAME}:${{ github.sha }}
-
-      - name: Docker Login via JFrog
-        run: |
-          jf docker login ${REGISTRY}
+            ${REGISTRY}/${JFROG_DOCKER_REPO}/${IMAGE_NAME}:${{ github.sha }}
 
       - name: Push Image
         run: |
           jf docker push \
-          ${REGISTRY}/${JFROG_DOCKER_REPO}/${IMAGE_NAME}:${{ github.sha }}
+            ${REGISTRY}/${JFROG_DOCKER_REPO}/${IMAGE_NAME}:${{ github.sha }} \
+            --build-name="${{ github.workflow }}" \
+            --build-number="${{ github.run_number }}" \
+            --skip-login
 
       - name: Build Info
         run: |
           jf rt build-collect-env
           jf rt build-add-git
-          jf rt build-publish
+          jf rt build-publish "${{ github.workflow }}" "${{ github.run_number }}"
