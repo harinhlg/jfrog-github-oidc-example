@@ -17,11 +17,17 @@ jobs:
       JFROG_DOCKER_REPO: "418949-docker-local"
       IMAGE_NAME: "my-app"
 
+      # IMPORTANT: your JFrog URL (with https)
+      JFROG_URL: ${{ secrets.JF_URL }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup JFrog CLI (OIDC)
+      # ----------------------------
+      # Setup JFrog CLI with OIDC
+      # ----------------------------
+      - name: Setup JFrog CLI
         uses: jfrog/setup-jfrog-cli@v4
         env:
           JF_URL: ${{ secrets.JF_URL }}
@@ -30,36 +36,43 @@ jobs:
           oidc-provider-name: ${{ env.OIDC_PROVIDER }}
           oidc-audience: ${{ env.OIDC_AUDIENCE }}
 
-      - name: Verify JFrog CLI
+      - name: Show CLI version
         run: jf --version
 
-      # -------------------------
-      # BUILD DOCKER IMAGE
-      # -------------------------
+      # ----------------------------
+      # FIX: remove https:// for Docker
+      # ----------------------------
+      - name: Prepare Docker Registry
+        run: |
+          echo "REGISTRY=$(echo $JFROG_URL | sed 's|https://||' | sed 's|http://||')" >> $GITHUB_ENV
+
+      # ----------------------------
+      # Build Docker Image
+      # ----------------------------
       - name: Build Docker Image
         run: |
           docker build -t ${IMAGE_NAME}:${{ github.sha }} .
 
-      # -------------------------
-      # TAG IMAGE FOR ARTIFACTORY
-      # -------------------------
+      # ----------------------------
+      # Tag Image for Artifactory
+      # ----------------------------
       - name: Tag Docker Image
         run: |
           docker tag \
             ${IMAGE_NAME}:${{ github.sha }} \
-            ${{ secrets.JF_URL }}/${JFROG_DOCKER_REPO}/${IMAGE_NAME}:${{ github.sha }}
+            ${REGISTRY}/${JFROG_DOCKER_REPO}/${IMAGE_NAME}:${{ github.sha }}
 
-      # -------------------------
-      # PUSH IMAGE USING JFROG CLI
-      # -------------------------
+      # ----------------------------
+      # Push Docker Image using JFrog CLI
+      # ----------------------------
       - name: Push Docker Image
         run: |
           jf docker push \
-            ${{ secrets.JF_URL }}/${JFROG_DOCKER_REPO}/${IMAGE_NAME}:${{ github.sha }}
+            ${REGISTRY}/${JFROG_DOCKER_REPO}/${IMAGE_NAME}:${{ github.sha }}
 
-      # -------------------------
-      # BUILD INFO
-      # -------------------------
+      # ----------------------------
+      # Build Info
+      # ----------------------------
       - name: Collect Build Info
         run: |
           jf rt build-collect-env
