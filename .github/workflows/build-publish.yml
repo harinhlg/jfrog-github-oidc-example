@@ -17,16 +17,16 @@ jobs:
       JFROG_DOCKER_REPO: "418949-docker-local"
       IMAGE_NAME: "my-app"
 
-      # IMPORTANT: your JFrog URL (with https)
+      # IMPORTANT: keep full URL here
       JFROG_URL: ${{ secrets.JF_URL }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # ----------------------------
-      # Setup JFrog CLI with OIDC
-      # ----------------------------
+      # -----------------------------
+      # JFrog OIDC Setup
+      # -----------------------------
       - name: Setup JFrog CLI
         uses: jfrog/setup-jfrog-cli@v4
         env:
@@ -36,43 +36,47 @@ jobs:
           oidc-provider-name: ${{ env.OIDC_PROVIDER }}
           oidc-audience: ${{ env.OIDC_AUDIENCE }}
 
-      - name: Show CLI version
+      - name: Show JFrog CLI Version
         run: jf --version
 
-      # ----------------------------
-      # FIX: remove https:// for Docker
-      # ----------------------------
-      - name: Prepare Docker Registry
+      # -----------------------------
+      # FIX REGISTRY (REMOVES https + trailing /)
+      # -----------------------------
+      - name: Prepare Clean Registry
         run: |
-          echo "REGISTRY=$(echo $JFROG_URL | sed 's|https://||' | sed 's|http://||')" >> $GITHUB_ENV
+          REGISTRY=$(echo "${JFROG_URL}" | sed 's|https://||' | sed 's|http://||' | sed 's|/$||')
+          echo "REGISTRY=$REGISTRY" >> $GITHUB_ENV
 
-      # ----------------------------
+      - name: Debug Registry (optional)
+        run: echo "REGISTRY=$REGISTRY"
+
+      # -----------------------------
       # Build Docker Image
-      # ----------------------------
+      # -----------------------------
       - name: Build Docker Image
         run: |
           docker build -t ${IMAGE_NAME}:${{ github.sha }} .
 
-      # ----------------------------
-      # Tag Image for Artifactory
-      # ----------------------------
+      # -----------------------------
+      # Tag Image Correctly (NO // ANYMORE)
+      # -----------------------------
       - name: Tag Docker Image
         run: |
           docker tag \
             ${IMAGE_NAME}:${{ github.sha }} \
             ${REGISTRY}/${JFROG_DOCKER_REPO}/${IMAGE_NAME}:${{ github.sha }}
 
-      # ----------------------------
-      # Push Docker Image using JFrog CLI
-      # ----------------------------
+      # -----------------------------
+      # Push to JFrog (OIDC AUTH HANDLED AUTOMATICALLY)
+      # -----------------------------
       - name: Push Docker Image
         run: |
           jf docker push \
             ${REGISTRY}/${JFROG_DOCKER_REPO}/${IMAGE_NAME}:${{ github.sha }}
 
-      # ----------------------------
+      # -----------------------------
       # Build Info
-      # ----------------------------
+      # -----------------------------
       - name: Collect Build Info
         run: |
           jf rt build-collect-env
