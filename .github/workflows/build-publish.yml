@@ -16,7 +16,6 @@ jobs:
       OIDC_PROVIDER: "harish"
       JFROG_DOCKER_REPO: "418949-docker-local"
       IMAGE_NAME: "my-app"
-      ARTIFACTORY_DOCKER_URL: ${{ secrets.JF_URL }}  # e.g. https://mycompany.jfrog.io
 
     steps:
       - name: Checkout
@@ -31,28 +30,36 @@ jobs:
           oidc-provider-name: ${{ env.OIDC_PROVIDER }}
           oidc-audience: ${{ env.OIDC_AUDIENCE }}
 
-      - name: Show JFrog CLI Version
+      - name: Verify JFrog CLI
         run: jf --version
 
+      # -------------------------
+      # BUILD DOCKER IMAGE
+      # -------------------------
       - name: Build Docker Image
         run: |
           docker build -t ${IMAGE_NAME}:${{ github.sha }} .
 
-      - name: Docker Login to JFrog
-        run: |
-          jf docker login ${ARTIFACTORY_DOCKER_URL}
-
-      - name: Tag Docker Image for Artifactory
+      # -------------------------
+      # TAG IMAGE FOR ARTIFACTORY
+      # -------------------------
+      - name: Tag Docker Image
         run: |
           docker tag \
             ${IMAGE_NAME}:${{ github.sha }} \
-            ${ARTIFACTORY_DOCKER_URL}/${JFROG_DOCKER_REPO}/${IMAGE_NAME}:${{ github.sha }}
+            ${{ secrets.JF_URL }}/${JFROG_DOCKER_REPO}/${IMAGE_NAME}:${{ github.sha }}
 
-      - name: Push Docker Image using JFrog CLI
+      # -------------------------
+      # PUSH IMAGE USING JFROG CLI
+      # -------------------------
+      - name: Push Docker Image
         run: |
           jf docker push \
-            ${ARTIFACTORY_DOCKER_URL}/${JFROG_DOCKER_REPO}/${IMAGE_NAME}:${{ github.sha }}
+            ${{ secrets.JF_URL }}/${JFROG_DOCKER_REPO}/${IMAGE_NAME}:${{ github.sha }}
 
+      # -------------------------
+      # BUILD INFO
+      # -------------------------
       - name: Collect Build Info
         run: |
           jf rt build-collect-env
