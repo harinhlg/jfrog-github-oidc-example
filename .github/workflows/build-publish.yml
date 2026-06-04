@@ -1,4 +1,4 @@
-name: "JFrog-GitHub Docker Publish OIDC Integration"
+name: "JFrog Docker OIDC Publish"
 
 on:
   push:
@@ -12,76 +12,67 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      OIDC_AUDIENCE: "jfrog-github"
-      OIDC_PROVIDER: "harish"
+      JFROG_URL: ${{ secrets.JF_URL }}
       JFROG_DOCKER_REPO: "418949-docker-local"
       IMAGE_NAME: "my-app"
 
-      # IMPORTANT: keep full URL here
-      JFROG_URL: ${{ secrets.JF_URL }}
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # -----------------------------
-      # JFrog OIDC Setup
-      # -----------------------------
+      # -------------------------
+      # Setup JFrog CLI (OIDC)
+      # -------------------------
       - name: Setup JFrog CLI
         uses: jfrog/setup-jfrog-cli@v4
         env:
           JF_URL: ${{ secrets.JF_URL }}
-          JFROG_CLI_LOG_LEVEL: DEBUG
         with:
-          oidc-provider-name: ${{ env.OIDC_PROVIDER }}
-          oidc-audience: ${{ env.OIDC_AUDIENCE }}
+          oidc-provider-name: harish
+          oidc-audience: jfrog-github
 
-      - name: Show JFrog CLI Version
-        run: jf --version
-
-      # -----------------------------
-      # FIX REGISTRY (REMOVES https + trailing /)
-      # -----------------------------
-      - name: Prepare Clean Registry
+      # -------------------------
+      # Clean registry (REMOVE https + trailing slash)
+      # -------------------------
+      - name: Prepare Registry
         run: |
-          REGISTRY=$(echo "${JFROG_URL}" | sed 's|https://||' | sed 's|http://||' | sed 's|/$||')
+          REGISTRY=$(echo "$JFROG_URL" | sed 's|https://||' | sed 's|http://||' | sed 's|/$||')
           echo "REGISTRY=$REGISTRY" >> $GITHUB_ENV
 
-      - name: Debug Registry (optional)
-        run: echo "REGISTRY=$REGISTRY"
-
-      # -----------------------------
-      # Build Docker Image
-      # -----------------------------
-      - name: Build Docker Image
+      # -------------------------
+      # Docker build
+      # -------------------------
+      - name: Build Image
         run: |
           docker build -t ${IMAGE_NAME}:${{ github.sha }} .
 
-      # -----------------------------
-      # Tag Image Correctly (NO // ANYMORE)
-      # -----------------------------
-      - name: Tag Docker Image
+      # -------------------------
+      # FIX: Full tag (IMPORTANT)
+      # -------------------------
+      - name: Tag Image
         run: |
-          docker tag \
-            ${IMAGE_NAME}:${{ github.sha }} \
-            ${REGISTRY}/${JFROG_DOCKER_REPO}/${IMAGE_NAME}:${{ github.sha }}
+          FULL_IMAGE=${REGISTRY}/${JFROG_DOCKER_REPO}/${IMAGE_NAME}:${{ github.sha }}
+          echo "FULL_IMAGE=$FULL_IMAGE" >> $GITHUB_ENV
+          docker tag ${IMAGE_NAME}:${{ github.sha }} $FULL_IMAGE
 
-      # -----------------------------
-      # Push to JFrog (OIDC AUTH HANDLED AUTOMATICALLY)
-      # -----------------------------
-      - name: Push Docker Image
+      # -------------------------
+      # FIX: Docker login (REQUIRED)
+      # -------------------------
+      - name: Docker Login
         run: |
-          jf docker push \
-            ${REGISTRY}/${JFROG_DOCKER_REPO}/${IMAGE_NAME}:${{ github.sha }}
+          jf docker login ${REGISTRY}
 
-      # -----------------------------
-      # Build Info
-      # -----------------------------
-      - name: Collect Build Info
+      # -------------------------
+      # Push image
+      # -------------------------
+      - name: Push Image
+        run: |
+          jf docker push ${FULL_IMAGE}
+
+      # -------------------------
+      # Build info
+      # -------------------------
+      - name: Build Info
         run: |
           jf rt build-collect-env
           jf rt build-add-git
-
-      - name: Publish Build Info
-        run: |
           jf rt build-publish
