@@ -17,62 +17,64 @@ jobs:
       IMAGE_NAME: "my-app"
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      # -------------------------
-      # Setup JFrog CLI (OIDC)
-      # -------------------------
+      # -----------------------------
+      # Setup JFrog CLI (OIDC login)
+      # -----------------------------
       - name: Setup JFrog CLI
         uses: jfrog/setup-jfrog-cli@v4
         env:
           JF_URL: ${{ secrets.JF_URL }}
+          JFROG_CLI_LOG_LEVEL: INFO
         with:
           oidc-provider-name: harish
           oidc-audience: jfrog-github
 
-      # -------------------------
-      # Clean registry (REMOVE https + trailing slash)
-      # -------------------------
+      - name: Verify CLI
+        run: jf --version
+
+      # -----------------------------
+      # CLEAN REGISTRY (FIX // ISSUE)
+      # -----------------------------
       - name: Prepare Registry
         run: |
-          REGISTRY=$(echo "$JFROG_URL" | sed 's|https://||' | sed 's|http://||' | sed 's|/$||')
+          REGISTRY=$(echo "${JFROG_URL}" | sed 's|https://||' | sed 's|http://||' | sed 's|/$||')
           echo "REGISTRY=$REGISTRY" >> $GITHUB_ENV
 
-      # -------------------------
-      # Docker build
-      # -------------------------
+      # -----------------------------
+      # BUILD DOCKER IMAGE
+      # -----------------------------
       - name: Build Image
         run: |
           docker build -t ${IMAGE_NAME}:${{ github.sha }} .
 
-      # -------------------------
-      # FIX: Full tag (IMPORTANT)
-      # -------------------------
+      # -----------------------------
+      # TAG IMAGE CORRECTLY
+      # -----------------------------
       - name: Tag Image
         run: |
-          FULL_IMAGE=${REGISTRY}/${JFROG_DOCKER_REPO}/${IMAGE_NAME}:${{ github.sha }}
-          echo "FULL_IMAGE=$FULL_IMAGE" >> $GITHUB_ENV
-          docker tag ${IMAGE_NAME}:${{ github.sha }} $FULL_IMAGE
+          docker tag \
+            ${IMAGE_NAME}:${{ github.sha }} \
+            ${REGISTRY}/${JFROG_DOCKER_REPO}/${IMAGE_NAME}:${{ github.sha }}
 
-      # -------------------------
-      # FIX: Docker login (REQUIRED)
-      # -------------------------
-      - name: Docker Login
-        run: |
-          jf docker login ${REGISTRY}
-
-      # -------------------------
-      # Push image
-      # -------------------------
+      # -----------------------------
+      # PUSH IMAGE (NO DOCKER LOGIN NEEDED)
+      # -----------------------------
       - name: Push Image
         run: |
-          jf docker push ${FULL_IMAGE}
+          jf docker push \
+            ${REGISTRY}/${JFROG_DOCKER_REPO}/${IMAGE_NAME}:${{ github.sha }}
 
-      # -------------------------
-      # Build info
-      # -------------------------
-      - name: Build Info
+      # -----------------------------
+      # BUILD INFO (OPTIONAL BUT GOOD)
+      # -----------------------------
+      - name: Collect Build Info
         run: |
           jf rt build-collect-env
           jf rt build-add-git
+
+      - name: Publish Build Info
+        run: |
           jf rt build-publish
