@@ -24,6 +24,7 @@ jobs:
         uses: jfrog/setup-jfrog-cli@v4
         env:
           JF_URL: ${{ secrets.JF_URL }}   # https://hts2.jfrog.io
+          JF_PROJECT: devops
         with:
           oidc-provider-name: harish
           oidc-audience: jfrog-github
