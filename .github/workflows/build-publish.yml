@@ -17,8 +17,7 @@ jobs:
       REGISTRY: hts2.jfrog.io
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Setup JFrog CLI (OIDC)
         id: setup-jfrog-cli
@@ -30,30 +29,29 @@ jobs:
           oidc-provider-name: harish
           oidc-audience: jfrog-github
 
-      - name: Verify OIDC login
+      - name: Verify OIDC
         run: jf rt ping
 
-      # IMPORTANT: login must use correct docker registry endpoint
-      - name: Docker Login (JFrog OIDC)
+      # IMPORTANT: use OIDC token manually
+      - name: Docker Login (FIXED)
         run: |
-          jf docker login \
-            hts2.jfrog.io \
-            --user "${{ steps.setup-jfrog-cli.outputs.oidc-user }}" \
-            --password "${{ steps.setup-jfrog-cli.outputs.oidc-token }}"
+          echo "${{ steps.setup-jfrog-cli.outputs.oidc-token }}" \
+            | docker login ${REGISTRY} \
+              -u "${{ steps.setup-jfrog-cli.outputs.oidc-user }}" \
+              --password-stdin
 
-      - name: Build Docker Image
+      - name: Build Image
         run: |
           docker build -t ${IMAGE_NAME}:${{ github.sha }} .
 
-      # IMPORTANT: tag must include repo name
       - name: Tag Image
         run: |
           docker tag ${IMAGE_NAME}:${{ github.sha }} \
-          hts2.jfrog.io/418949-docker-local/${IMAGE_NAME}:${{ github.sha }}
+            ${REGISTRY}/${JFROG_DOCKER_REPO}/${IMAGE_NAME}:${{ github.sha }}
 
       - name: Push Image
         run: |
-          docker push hts2.jfrog.io/418949-docker-local/${IMAGE_NAME}:${{ github.sha }}
+          docker push ${REGISTRY}/${JFROG_DOCKER_REPO}/${IMAGE_NAME}:${{ github.sha }}
 
       - name: Publish Build Info
         run: |
