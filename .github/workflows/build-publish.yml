@@ -1,4 +1,4 @@
-name: "JFrog Docker Publish"
+name: JFrog Docker Publish
 
 on:
   push:
@@ -17,46 +17,46 @@ jobs:
       REGISTRY: hts2.jfrog.io
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Setup JFrog CLI
-        id: setup-jfrog-cli          # REQUIRED for oidc-user / oidc-token outputs
+      - name: Setup JFrog CLI (OIDC)
+        id: setup-jfrog-cli
         uses: jfrog/setup-jfrog-cli@v4
         env:
-          JF_URL: ${{ secrets.JF_URL }}   # https://hts2.jfrog.io
-          JFROG_CLI_OIDC_PROJECT_KEY: "devops"
-          #JF_PROJECT: "devops"
+          JF_URL: ${{ secrets.JF_URL }}
+          JFROG_CLI_OIDC_PROJECT_KEY: devops
         with:
           oidc-provider-name: harish
           oidc-audience: jfrog-github
 
-      - name: Verify OIDC credentials exist
+      - name: Verify OIDC login
+        run: jf rt ping
+
+      # IMPORTANT: login must use correct docker registry endpoint
+      - name: Docker Login (JFrog OIDC)
         run: |
-          if [ -z "${{ steps.setup-jfrog-cli.outputs.oidc-user }}" ]; then
-            echo "ERROR: oidc-user output is empty — OIDC token exchange failed"
-            exit 1
-          fi
-          echo "OIDC user is set (value hidden)"
+          jf docker login \
+            hts2.jfrog.io \
+            --user "${{ steps.setup-jfrog-cli.outputs.oidc-user }}" \
+            --password "${{ steps.setup-jfrog-cli.outputs.oidc-token }}"
 
-      - name: Login to Docker registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ steps.setup-jfrog-cli.outputs.oidc-user }}
-          password: ${{ steps.setup-jfrog-cli.outputs.oidc-token }}
-
-      - name: Build Image
-        run: docker build -t ${IMAGE_NAME}:${{ github.sha }} .
-
-      - name: Tag and Push Image
+      - name: Build Docker Image
         run: |
-          FULL_IMAGE="${REGISTRY}/${JFROG_DOCKER_REPO}/${IMAGE_NAME}:${{ github.sha }}"
-          docker tag ${IMAGE_NAME}:${{ github.sha }} ${FULL_IMAGE}
-          docker push ${FULL_IMAGE}
+          docker build -t ${IMAGE_NAME}:${{ github.sha }} .
 
-      - name: Build Info
+      # IMPORTANT: tag must include repo name
+      - name: Tag Image
+        run: |
+          docker tag ${IMAGE_NAME}:${{ github.sha }} \
+          hts2.jfrog.io/418949-docker-local/${IMAGE_NAME}:${{ github.sha }}
+
+      - name: Push Image
+        run: |
+          docker push hts2.jfrog.io/418949-docker-local/${IMAGE_NAME}:${{ github.sha }}
+
+      - name: Publish Build Info
         run: |
           jf rt build-collect-env
           jf rt build-add-git
           jf rt build-publish
-          
