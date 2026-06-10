@@ -13,48 +13,38 @@ jobs:
 
     env:
       IMAGE_NAME: my-app
-      JFROG_DOCKER_REPO: 418949-docker-local
       REGISTRY: hts2.jfrog.io
+      REPO: 418949-docker-local
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup JFrog CLI (OIDC)
-        id: setup-jfrog-cli
+        id: setup
         uses: jfrog/setup-jfrog-cli@v4
         env:
           JF_URL: ${{ secrets.JF_URL }}
-          JFROG_CLI_OIDC_PROJECT_KEY: devops
         with:
-          oidc-provider-name: harish
-          oidc-audience: jfrog-github
+          oidc-provider-name: ${{ secrets.OIDC_PROVIDER }}
+          oidc-audience: ${{ secrets.ODIC_AUDIENCE }}
 
-      - name: Verify OIDC
+      - name: Verify login
         run: jf rt ping
 
-      # IMPORTANT: use OIDC token manually
-      - name: Docker Login (FIXED)
+      - name: Docker Login (OIDC)
         run: |
-          echo "${{ steps.setup-jfrog-cli.outputs.oidc-token }}" \
-            | docker login ${REGISTRY} \
-              -u "${{ steps.setup-jfrog-cli.outputs.oidc-user }}" \
-              --password-stdin
+          echo "${{ steps.setup.outputs.oidc-token }}" | docker login $REGISTRY \
+            -u "${{ steps.setup.outputs.oidc-user }}" \
+            --password-stdin
 
-      - name: Build Image
-        run: |
-          docker build -t ${IMAGE_NAME}:${{ github.sha }} .
+      - name: Build
+        run: docker build -t $IMAGE_NAME:${{ github.sha }} .
 
-      - name: Tag Image
+      - name: Tag
         run: |
-          docker tag ${IMAGE_NAME}:${{ github.sha }} \
-            ${REGISTRY}/${JFROG_DOCKER_REPO}/${IMAGE_NAME}:${{ github.sha }}
+          docker tag $IMAGE_NAME:${{ github.sha }} \
+          $REGISTRY/$REPO/$IMAGE_NAME:${{ github.sha }}
 
-      - name: Push Image
+      - name: Push
         run: |
-          docker push ${REGISTRY}/${JFROG_DOCKER_REPO}/${IMAGE_NAME}:${{ github.sha }}
-
-      - name: Publish Build Info
-        run: |
-          jf rt build-collect-env
-          jf rt build-add-git
-          jf rt build-publish
+          docker push $REGISTRY/$REPO/$IMAGE_NAME:${{ github.sha }}
