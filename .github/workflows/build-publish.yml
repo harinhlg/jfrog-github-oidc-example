@@ -24,7 +24,7 @@ jobs:
         uses: jfrog/setup-jfrog-cli@v4
         env:
           JF_URL: ${{ secrets.JF_URL }}
-          JFROG_CLI_OIDC_PROJECT_KEY: "devops"
+          #JFROG_CLI_OIDC_PROJECT_KEY: "devops"
         with:
           oidc-provider-name: ${{ secrets.OIDC_PROVIDER }}
           oidc-audience: ${{ secrets.ODIC_AUDIENCE }}
