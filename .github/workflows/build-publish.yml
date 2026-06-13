@@ -13,8 +13,7 @@ jobs:
 
     env:
       IMAGE_NAME: my-app
-      # Subdomain registry from Artifactory "Set Me Up"
-      REGISTRY: hts2-418949-docker-local.jfrog.io
+      REGISTRY: hts2-421414-docker-testing.jfrog.io
 
     steps:
       - uses: actions/checkout@v4
@@ -24,7 +23,6 @@ jobs:
         uses: jfrog/setup-jfrog-cli@v4
         env:
           JF_URL: ${{ secrets.JF_URL }}
-          #JFROG_CLI_OIDC_PROJECT_KEY: "devops"
         with:
           oidc-provider-name: ${{ secrets.OIDC_PROVIDER }}
           oidc-audience: ${{ secrets.ODIC_AUDIENCE }}
@@ -38,8 +36,25 @@ jobs:
             -u "${{ steps.setup.outputs.oidc-user }}" \
             --password-stdin
 
-      - name: Build
+      - name: Build amd64 image
         run: docker build -t $REGISTRY/$IMAGE_NAME:${{ github.sha }} .
 
-      - name: Push
+      - name: Push amd64 image
         run: docker push $REGISTRY/$IMAGE_NAME:${{ github.sha }}
+
+      - name: Pull image back
+        run: docker pull $REGISTRY/$IMAGE_NAME:${{ github.sha }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and Push Multi-Arch Image
+        run: |
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            -t $REGISTRY/$IMAGE_NAME:${{ github.sha }} \
+            --push \
+            .
